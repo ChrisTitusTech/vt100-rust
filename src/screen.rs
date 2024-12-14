@@ -683,7 +683,7 @@ impl Screen {
         self.attrs.inverse()
     }
 
-    pub(crate) fn grid(&self) -> &crate::grid::Grid {
+    pub fn grid(&self) -> &crate::grid::Grid {
         if self.mode(MODE_ALTERNATE_SCREEN) {
             &self.alternate_grid
         } else {
