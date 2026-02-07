@@ -1,4 +1,4 @@
-use ratatui::style::{Modifier, Style};
+use ratatui_core::style::{Modifier, Style};
 
 use tui_term::widget::{Cell, Screen};
 
@@ -28,13 +28,13 @@ impl Cell for crate::Cell {
     }
 
     #[inline]
-    fn apply(&self, cell: &mut ratatui::buffer::Cell) {
+    fn apply(&self, cell: &mut ratatui_core::buffer::Cell) {
         fill_buf_cell(self, cell)
     }
 }
 
 #[inline]
-fn fill_buf_cell(screen_cell: &crate::Cell, buf_cell: &mut ratatui::buffer::Cell) {
+fn fill_buf_cell(screen_cell: &crate::Cell, buf_cell: &mut ratatui_core::buffer::Cell) {
     let fg = screen_cell.fgcolor();
     let bg = screen_cell.bgcolor();
     if screen_cell.has_contents() {
@@ -124,7 +124,7 @@ impl From<Color> for crate::Color {
     }
 }
 
-impl From<Color> for ratatui::style::Color {
+impl From<Color> for ratatui_core::style::Color {
     #[inline]
     fn from(value: Color) -> Self {
         match value {
