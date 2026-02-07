@@ -16,7 +16,7 @@ impl vt100_ctt::Callbacks for Callbacks {
 
     fn set_window_icon_name(
         &mut self,
-        screen: &mut vt100::Screen,
+        screen: &mut vt100_ctt::Screen,
         icon_name: &[u8],
     ) {
         std::hint::black_box((screen, icon_name));
@@ -26,17 +26,17 @@ impl vt100_ctt::Callbacks for Callbacks {
         std::hint::black_box((screen, title));
     }
 
-    fn unhandled_char(&mut self, screen: &mut vt100::Screen, c: char) {
+    fn unhandled_char(&mut self, screen: &mut vt100_ctt::Screen, c: char) {
         std::hint::black_box((screen, c));
     }
 
-    fn unhandled_control(&mut self, screen: &mut vt100::Screen, b: u8) {
+    fn unhandled_control(&mut self, screen: &mut vt100_ctt::Screen, b: u8) {
         std::hint::black_box((screen, b));
     }
 
     fn unhandled_escape(
         &mut self,
-        screen: &mut vt100::Screen,
+        screen: &mut vt100_ctt::Screen,
         i1: Option<u8>,
         i2: Option<u8>,
         b: u8,
@@ -46,7 +46,7 @@ impl vt100_ctt::Callbacks for Callbacks {
 
     fn unhandled_csi(
         &mut self,
-        screen: &mut vt100::Screen,
+        screen: &mut vt100_ctt::Screen,
         i1: Option<u8>,
         i2: Option<u8>,
         params: &[&[u16]],
@@ -57,7 +57,7 @@ impl vt100_ctt::Callbacks for Callbacks {
 
     fn unhandled_osc(
         &mut self,
-        screen: &mut vt100::Screen,
+        screen: &mut vt100_ctt::Screen,
         params: &[&[u8]],
     ) {
         std::hint::black_box((screen, params));

@@ -70,7 +70,9 @@ fn main() {
         match stdin.read(&mut buf) {
             Ok(0) => break,
             Ok(n) => {
-                parser.advance(&mut performer, &buf[..n]);
+                for byte in &buf[..n] {
+                    parser.advance(&mut performer, *byte);
+                }
             }
             Err(err) => {
                 eprintln!("err: {err}");

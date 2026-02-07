@@ -64,7 +64,7 @@ fn decsc() {
 
 #[test]
 fn decsc_resize() {
-    let mut parser = vt100::Parser::new(24, 80, 0);
+    let mut parser = vt100_ctt::Parser::new(24, 80, 0);
     parser.process(b"foo\x1b[20;70Hbar\x1b7");
     assert_eq!(parser.screen().contents(), "foo\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n                                                                     bar");
     assert_eq!(parser.screen().cursor_position(), (19, 72));

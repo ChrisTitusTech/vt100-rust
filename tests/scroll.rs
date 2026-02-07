@@ -178,7 +178,7 @@ fn edge_of_screen() {
 
 #[test]
 fn scrollback_larger_than_rows() {
-    let mut parser = vt100::Parser::new(3, 20, 10);
+    let mut parser = vt100_ctt::Parser::new(3, 20, 10);
 
     parser.process(gen_nums(1..=10, "\r\n").as_bytes());
 
