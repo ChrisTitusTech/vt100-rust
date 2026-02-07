@@ -46,7 +46,9 @@ impl<CB: crate::callbacks::Callbacks> Parser<CB> {
     /// Processes the contents of the given byte string, and updates the
     /// in-memory terminal state.
     pub fn process(&mut self, bytes: &[u8]) {
-        self.parser.advance(&mut self.screen, bytes);
+        for byte in bytes {
+            self.parser.advance(&mut self.screen, *byte);
+        }
     }
 
     /// Returns a reference to a [`Screen`](crate::Screen) object containing
