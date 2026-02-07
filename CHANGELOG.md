@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.17.1] - 2026-02-06
+
+### Fixed
+
+* Fixed parser to iterate through all bytes for vte 0.13.1 compatibility
+* Updated documentation examples to use vt100_ctt namespace
+
+### Added
+
+* Added comprehensive linutil integration tests
+
+## [0.17.0] - 2026-02-06
+
+### Added
+
+* Support for tui-term 0.3.1 integration
+* Updated to ratatui 0.29.0 and ratatui-core 0.1.0
+
 ## [0.16.2] - 2025-07-11
 
 ### Fixed

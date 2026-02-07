@@ -1,6 +1,6 @@
 [package]
 name = "vt100-ctt"
-version = "0.17.0"
+version = "0.17.1"
 authors = [
     "Chris Titus <contact@christitus.com>",
     "Jesse Luehrs <doy@tozt.net>",
