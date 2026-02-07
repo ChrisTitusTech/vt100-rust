@@ -25,6 +25,8 @@ pub struct FixtureCell {
     #[serde(default, skip_serializing_if = "is_default")]
     bold: bool,
     #[serde(default, skip_serializing_if = "is_default")]
+    dim: bool,
+    #[serde(default, skip_serializing_if = "is_default")]
     italic: bool,
     #[serde(default, skip_serializing_if = "is_default")]
     underline: bool,
@@ -36,12 +38,13 @@ impl FixtureCell {
     #[allow(dead_code)]
     pub fn from_cell(cell: &vt100_ctt::Cell) -> Self {
         Self {
-            contents: cell.contents(),
+            contents: cell.contents().to_string(),
             is_wide: cell.is_wide(),
             is_wide_continuation: cell.is_wide_continuation(),
             fgcolor: cell.fgcolor(),
             bgcolor: cell.bgcolor(),
             bold: cell.bold(),
+            dim: cell.dim(),
             italic: cell.italic(),
             underline: cell.underline(),
             inverse: cell.inverse(),
@@ -54,10 +57,6 @@ pub struct FixtureScreen {
     contents: String,
     cells: std::collections::BTreeMap<String, FixtureCell>,
     cursor_position: (u16, u16),
-    #[serde(default, skip_serializing_if = "is_default")]
-    title: String,
-    #[serde(default, skip_serializing_if = "is_default")]
-    icon_name: String,
     #[serde(default, skip_serializing_if = "is_default")]
     application_keypad: bool,
     #[serde(default, skip_serializing_if = "is_default")]
@@ -108,8 +107,6 @@ impl FixtureScreen {
             contents: screen.contents(),
             cells,
             cursor_position: screen.cursor_position(),
-            title: screen.title().to_string(),
-            icon_name: screen.icon_name().to_string(),
             application_keypad: screen.application_keypad(),
             application_cursor: screen.application_cursor(),
             hide_cursor: screen.hide_cursor(),
@@ -254,8 +251,6 @@ fn assert_produces(input: &[u8], expected: &FixtureScreen) {
 
     assert_eq!(parser.screen().contents(), expected.contents);
     assert_eq!(parser.screen().cursor_position(), expected.cursor_position);
-    assert_eq!(parser.screen().title(), expected.title);
-    assert_eq!(parser.screen().icon_name(), expected.icon_name);
     assert_eq!(
         parser.screen().application_keypad(),
         expected.application_keypad
@@ -293,6 +288,7 @@ fn assert_produces(input: &[u8], expected: &FixtureScreen) {
             assert_eq!(got_cell.fgcolor(), expected_cell.fgcolor);
             assert_eq!(got_cell.bgcolor(), expected_cell.bgcolor);
             assert_eq!(got_cell.bold(), expected_cell.bold);
+            assert_eq!(got_cell.dim(), expected_cell.dim);
             assert_eq!(got_cell.italic(), expected_cell.italic);
             assert_eq!(got_cell.underline(), expected_cell.underline);
             assert_eq!(got_cell.inverse(), expected_cell.inverse);

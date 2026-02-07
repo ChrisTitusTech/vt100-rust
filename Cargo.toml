@@ -6,6 +6,7 @@ authors = [
     "Jesse Luehrs <doy@tozt.net>",
 ]
 edition = "2021"
+rust-version = "1.70"
 
 description = "Library for parsing terminal data - up-to-date version"
 homepage = "https://github.com/ChrisTitusTech/vt100-rust"

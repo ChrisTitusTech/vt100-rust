@@ -14,8 +14,53 @@ impl vt100_ctt::Callbacks for Callbacks {
         std::hint::black_box((screen, request));
     }
 
-    fn error(&mut self, screen: &mut vt100_ctt::Screen) {
-        std::hint::black_box(screen);
+    fn set_window_icon_name(
+        &mut self,
+        screen: &mut vt100::Screen,
+        icon_name: &[u8],
+    ) {
+        std::hint::black_box((screen, icon_name));
+    }
+
+    fn set_window_title(&mut self, screen: &mut vt100_ctt::Screen, title: &[u8]) {
+        std::hint::black_box((screen, title));
+    }
+
+    fn unhandled_char(&mut self, screen: &mut vt100::Screen, c: char) {
+        std::hint::black_box((screen, c));
+    }
+
+    fn unhandled_control(&mut self, screen: &mut vt100::Screen, b: u8) {
+        std::hint::black_box((screen, b));
+    }
+
+    fn unhandled_escape(
+        &mut self,
+        screen: &mut vt100::Screen,
+        i1: Option<u8>,
+        i2: Option<u8>,
+        b: u8,
+    ) {
+        std::hint::black_box((screen, i1, i2, b));
+    }
+
+    fn unhandled_csi(
+        &mut self,
+        screen: &mut vt100::Screen,
+        i1: Option<u8>,
+        i2: Option<u8>,
+        params: &[&[u16]],
+        c: char,
+    ) {
+        std::hint::black_box((screen, i1, i2, params, c));
+    }
+
+    fn unhandled_osc(
+        &mut self,
+        screen: &mut vt100::Screen,
+        params: &[&[u8]],
+    ) {
+        std::hint::black_box((screen, params));
     }
 }
 
@@ -31,9 +76,9 @@ fn read_frames() -> impl Iterator<Item = Vec<u8>> {
 }
 
 fn process_frames(frames: &[Vec<u8>]) {
-    let mut parser = vt100_ctt::Parser::default();
+    let mut parser = vt100_ctt::Parser::new_with_callbacks(24, 80, 0, Callbacks);
     for frame in frames {
-        parser.process_cb(frame, &mut Callbacks);
+        parser.process(frame);
     }
 }
 

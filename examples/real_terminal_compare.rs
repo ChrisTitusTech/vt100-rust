@@ -14,7 +14,7 @@ fn main() {
     let mut termios = nix::sys::termios::tcgetattr(stdin_fd).unwrap();
     nix::sys::termios::cfmakeraw(&mut termios);
     nix::sys::termios::tcsetattr(
-        stdin_fd,
+        std::io::stdin(),
         nix::sys::termios::SetArg::TCSANOW,
         &termios,
     )

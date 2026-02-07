@@ -1,48 +1,87 @@
-pub struct WrappedScreen(pub crate::Screen);
+const BASE64: &[u8] =
+    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+const CLIPBOARD_SELECTOR: &[u8] = b"cpqs01234567";
 
-impl vte::Perform for WrappedScreen {
+pub struct WrappedScreen<CB: crate::callbacks::Callbacks = ()> {
+    pub screen: crate::screen::Screen,
+    pub callbacks: CB,
+}
+
+impl WrappedScreen<()> {
+    pub fn new(rows: u16, cols: u16, scrollback_len: usize) -> Self {
+        Self::new_with_callbacks(rows, cols, scrollback_len, ())
+    }
+}
+
+impl<CB: crate::callbacks::Callbacks> WrappedScreen<CB> {
+    pub fn new_with_callbacks(
+        rows: u16,
+        cols: u16,
+        scrollback_len: usize,
+        callbacks: CB,
+    ) -> Self {
+        Self {
+            screen: crate::screen::Screen::new(
+                crate::grid::Size { rows, cols },
+                scrollback_len,
+            ),
+            callbacks,
+        }
+    }
+}
+
+impl<CB: crate::callbacks::Callbacks> vte::Perform for WrappedScreen<CB> {
     fn print(&mut self, c: char) {
         if c == '\u{fffd}' || ('\u{80}'..'\u{a0}').contains(&c) {
-            log::debug!("unhandled text character: {c}");
+            self.callbacks.unhandled_char(&mut self.screen, c);
+        } else {
+            self.screen.text(c);
         }
-        self.0.text(c);
     }
 
     fn execute(&mut self, b: u8) {
         match b {
-            8 => self.0.bs(),
-            9 => self.0.tab(),
-            10 => self.0.lf(),
-            11 => self.0.vt(),
-            12 => self.0.ff(),
-            13 => self.0.cr(),
+            7 => self.callbacks.audible_bell(&mut self.screen),
+            8 => self.screen.bs(),
+            9 => self.screen.tab(),
+            10 => self.screen.lf(),
+            11 => self.screen.vt(),
+            12 => self.screen.ff(),
+            13 => self.screen.cr(),
             // we don't implement shift in/out alternate character sets, but
             // it shouldn't count as an "error"
-            7 | 14 | 15 => {}
-            _ => {
-                log::debug!("unhandled control character: {b}");
-            }
+            14 | 15 => {}
+            _ => self.callbacks.unhandled_control(&mut self.screen, b),
         }
     }
 
     fn esc_dispatch(&mut self, intermediates: &[u8], _ignore: bool, b: u8) {
-        intermediates.first().map_or_else(
-            || match b {
-                b'7' => self.0.decsc(),
-                b'8' => self.0.decrc(),
-                b'=' => self.0.deckpam(),
-                b'>' => self.0.deckpnm(),
-                b'M' => self.0.ri(),
-                b'c' => self.0.ris(),
-                b'g' => {}
+        if let Some(i) = intermediates.first() {
+            self.callbacks.unhandled_escape(
+                &mut self.screen,
+                Some(*i),
+                intermediates.get(1).copied(),
+                b,
+            );
+        } else {
+            match b {
+                b'7' => self.screen.decsc(),
+                b'8' => self.screen.decrc(),
+                b'=' => self.screen.deckpam(),
+                b'>' => self.screen.deckpnm(),
+                b'M' => self.screen.ri(),
+                b'c' => self.screen.ris(),
+                b'g' => self.callbacks.visual_bell(&mut self.screen),
                 _ => {
-                    log::debug!("unhandled escape code: ESC {b}");
+                    self.callbacks.unhandled_escape(
+                        &mut self.screen,
+                        None,
+                        None,
+                        b,
+                    );
                 }
-            },
-            |i| {
-                log::debug!("unhandled escape code: ESC {i} {b}");
-            },
-        );
+            }
+        }
     }
 
     fn csi_dispatch(
@@ -52,113 +91,149 @@ impl vte::Perform for WrappedScreen {
         _ignore: bool,
         c: char,
     ) {
+        let unhandled = |screen: &mut crate::screen::Screen| {
+            self.callbacks.unhandled_csi(
+                screen,
+                intermediates.first().copied(),
+                intermediates.get(1).copied(),
+                &params.iter().collect::<Vec<_>>(),
+                c,
+            );
+        };
         match intermediates.first() {
             None => match c {
-                '@' => self.0.ich(canonicalize_params_1(params, 1)),
-                'A' => self.0.cuu(canonicalize_params_1(params, 1)),
-                'B' => self.0.cud(canonicalize_params_1(params, 1)),
-                'C' => self.0.cuf(canonicalize_params_1(params, 1)),
-                'D' => self.0.cub(canonicalize_params_1(params, 1)),
-                'E' => self.0.cnl(canonicalize_params_1(params, 1)),
-                'F' => self.0.cpl(canonicalize_params_1(params, 1)),
-                'G' => self.0.cha(canonicalize_params_1(params, 1)),
-                'H' => self.0.cup(canonicalize_params_2(params, 1, 1)),
-                'J' => self.0.ed(canonicalize_params_1(params, 0)),
-                'K' => self.0.el(canonicalize_params_1(params, 0)),
-                'L' => self.0.il(canonicalize_params_1(params, 1)),
-                'M' => self.0.dl(canonicalize_params_1(params, 1)),
-                'P' => self.0.dch(canonicalize_params_1(params, 1)),
-                'S' => self.0.su(canonicalize_params_1(params, 1)),
-                'T' => self.0.sd(canonicalize_params_1(params, 1)),
-                'X' => self.0.ech(canonicalize_params_1(params, 1)),
-                'd' => self.0.vpa(canonicalize_params_1(params, 1)),
-                'h' => self.0.sm(params),
-                'l' => self.0.rm(params),
-                'm' => self.0.sgr(params),
-                'r' => self.0.decstbm(canonicalize_params_decstbm(
+                '@' => self.screen.ich(canonicalize_params_1(params, 1)),
+                'A' => self.screen.cuu(canonicalize_params_1(params, 1)),
+                'B' => self.screen.cud(canonicalize_params_1(params, 1)),
+                'C' => self.screen.cuf(canonicalize_params_1(params, 1)),
+                'D' => self.screen.cub(canonicalize_params_1(params, 1)),
+                'E' => self.screen.cnl(canonicalize_params_1(params, 1)),
+                'F' => self.screen.cpl(canonicalize_params_1(params, 1)),
+                'G' => self.screen.cha(canonicalize_params_1(params, 1)),
+                'H' => self.screen.cup(canonicalize_params_2(params, 1, 1)),
+                'J' => self
+                    .screen
+                    .ed(canonicalize_params_1(params, 0), unhandled),
+                'K' => self
+                    .screen
+                    .el(canonicalize_params_1(params, 0), unhandled),
+                'L' => self.screen.il(canonicalize_params_1(params, 1)),
+                'M' => self.screen.dl(canonicalize_params_1(params, 1)),
+                'P' => self.screen.dch(canonicalize_params_1(params, 1)),
+                'S' => self.screen.su(canonicalize_params_1(params, 1)),
+                'T' => self.screen.sd(canonicalize_params_1(params, 1)),
+                'X' => self.screen.ech(canonicalize_params_1(params, 1)),
+                'd' => self.screen.vpa(canonicalize_params_1(params, 1)),
+                'm' => self.screen.sgr(params, unhandled),
+                'r' => self.screen.decstbm(canonicalize_params_decstbm(
                     params,
-                    self.0.grid().size(),
+                    self.screen.grid().size(),
                 )),
-                't' => self.0.xtwinops(params),
-                _ => {
-                    if log::log_enabled!(log::Level::Debug) {
-                        log::debug!(
-                            "unhandled csi sequence: CSI {} {}",
-                            param_str(params),
-                            c
+                't' => {
+                    let mut params_iter = params.iter();
+                    let op =
+                        params_iter.next().and_then(|x| x.first().copied());
+                    if op == Some(8) {
+                        let (screen_rows, screen_cols) = self.screen.size();
+                        let rows =
+                            params_iter.next().map_or(screen_rows, |x| {
+                                *x.first().unwrap_or(&screen_rows)
+                            });
+                        let cols =
+                            params_iter.next().map_or(screen_cols, |x| {
+                                *x.first().unwrap_or(&screen_cols)
+                            });
+                        self.callbacks.resize(&mut self.screen, (rows, cols));
+                    } else {
+                        self.callbacks.unhandled_csi(
+                            &mut self.screen,
+                            None,
+                            None,
+                            &params.iter().collect::<Vec<_>>(),
+                            c,
                         );
                     }
+                }
+                _ => {
+                    self.callbacks.unhandled_csi(
+                        &mut self.screen,
+                        None,
+                        None,
+                        &params.iter().collect::<Vec<_>>(),
+                        c,
+                    );
                 }
             },
             Some(b'?') => match c {
-                'J' => self.0.decsed(canonicalize_params_1(params, 0)),
-                'K' => self.0.decsel(canonicalize_params_1(params, 0)),
-                'h' => self.0.decset(params),
-                'l' => self.0.decrst(params),
+                'J' => self
+                    .screen
+                    .decsed(canonicalize_params_1(params, 0), unhandled),
+                'K' => self
+                    .screen
+                    .decsel(canonicalize_params_1(params, 0), unhandled),
+                'h' => self.screen.decset(params, unhandled),
+                'l' => self.screen.decrst(params, unhandled),
                 _ => {
-                    if log::log_enabled!(log::Level::Debug) {
-                        log::debug!(
-                            "unhandled csi sequence: CSI ? {} {}",
-                            param_str(params),
-                            c
-                        );
-                    }
+                    self.callbacks.unhandled_csi(
+                        &mut self.screen,
+                        Some(b'?'),
+                        intermediates.get(1).copied(),
+                        &params.iter().collect::<Vec<_>>(),
+                        c,
+                    );
                 }
             },
             Some(i) => {
-                if log::log_enabled!(log::Level::Debug) {
-                    log::debug!(
-                        "unhandled csi sequence: CSI {} {} {}",
-                        i,
-                        param_str(params),
-                        c
-                    );
-                }
+                self.callbacks.unhandled_csi(
+                    &mut self.screen,
+                    Some(*i),
+                    intermediates.get(1).copied(),
+                    &params.iter().collect::<Vec<_>>(),
+                    c,
+                );
             }
         }
     }
 
     fn osc_dispatch(&mut self, params: &[&[u8]], _bel_terminated: bool) {
-        match (params.first(), params.get(1)) {
-            (Some(&b"0"), Some(s)) => self.0.osc0(s),
-            (Some(&b"1"), Some(s)) => self.0.osc1(s),
-            (Some(&b"2"), Some(s)) => self.0.osc2(s),
-            _ => {
-                if log::log_enabled!(log::Level::Debug) {
-                    log::debug!(
-                        "unhandled osc sequence: OSC {}",
-                        osc_param_str(params),
-                    );
+        match params {
+            [b"0", s] => {
+                self.callbacks.set_window_icon_name(&mut self.screen, s);
+                self.callbacks.set_window_title(&mut self.screen, s);
+            }
+            [b"1", s] => {
+                self.callbacks.set_window_icon_name(&mut self.screen, s);
+            }
+            [b"2", s] => {
+                self.callbacks.set_window_title(&mut self.screen, s);
+            }
+            [b"52", ty, data] => {
+                match (
+                    ty.iter().all(|c| CLIPBOARD_SELECTOR.contains(c)),
+                    *data,
+                ) {
+                    (true, b"?") => {
+                        self.callbacks
+                            .paste_from_clipboard(&mut self.screen, ty);
+                    }
+                    (true, data)
+                        if data.iter().all(|c| BASE64.contains(c)) =>
+                    {
+                        self.callbacks.copy_to_clipboard(
+                            &mut self.screen,
+                            ty,
+                            data,
+                        );
+                    }
+                    _ => {
+                        self.callbacks
+                            .unhandled_osc(&mut self.screen, params);
+                    }
                 }
             }
-        }
-    }
-
-    fn hook(
-        &mut self,
-        params: &vte::Params,
-        intermediates: &[u8],
-        _ignore: bool,
-        action: char,
-    ) {
-        if log::log_enabled!(log::Level::Debug) {
-            intermediates.first().map_or_else(
-                || {
-                    log::debug!(
-                        "unhandled dcs sequence: DCS {} {}",
-                        param_str(params),
-                        action,
-                    );
-                },
-                |i| {
-                    log::debug!(
-                        "unhandled dcs sequence: DCS {} {} {}",
-                        i,
-                        param_str(params),
-                        action,
-                    );
-                },
-            );
+            _ => {
+                self.callbacks.unhandled_osc(&mut self.screen, params);
+            }
         }
     }
 }
@@ -199,107 +274,4 @@ fn canonicalize_params_decstbm(
     let bottom = if bottom == 0 { size.rows } else { bottom };
 
     (top, bottom)
-}
-
-pub fn param_str(params: &vte::Params) -> String {
-    let strs: Vec<_> = params
-        .iter()
-        .map(|subparams| {
-            let subparam_strs: Vec<_> = subparams
-                .iter()
-                .map(std::string::ToString::to_string)
-                .collect();
-            subparam_strs.join(" : ")
-        })
-        .collect();
-    strs.join(" ; ")
-}
-
-fn osc_param_str(params: &[&[u8]]) -> String {
-    let strs: Vec<_> = params
-        .iter()
-        .map(|b| format!("\"{}\"", std::string::String::from_utf8_lossy(b)))
-        .collect();
-    strs.join(" ; ")
-}
-
-pub struct WrappedScreenWithCallbacks<'a, T: crate::callbacks::Callbacks> {
-    screen: &'a mut crate::perform::WrappedScreen,
-    callbacks: &'a mut T,
-}
-
-impl<'a, T: crate::callbacks::Callbacks> WrappedScreenWithCallbacks<'a, T> {
-    pub fn new(
-        screen: &'a mut crate::perform::WrappedScreen,
-        callbacks: &'a mut T,
-    ) -> Self {
-        Self { screen, callbacks }
-    }
-}
-
-impl<'a, T: crate::callbacks::Callbacks> vte::Perform
-    for WrappedScreenWithCallbacks<'a, T>
-{
-    fn print(&mut self, c: char) {
-        if c == '\u{fffd}' || ('\u{80}'..'\u{a0}').contains(&c) {
-            self.callbacks.error(&mut self.screen.0);
-        }
-        self.screen.print(c);
-    }
-
-    fn execute(&mut self, b: u8) {
-        match b {
-            7 => self.callbacks.audible_bell(&mut self.screen.0),
-            8..=15 => {}
-            _ => {
-                self.callbacks.error(&mut self.screen.0);
-            }
-        }
-        self.screen.execute(b);
-    }
-
-    fn esc_dispatch(&mut self, intermediates: &[u8], ignore: bool, b: u8) {
-        if intermediates.is_empty() && b == b'g' {
-            self.callbacks.visual_bell(&mut self.screen.0);
-        }
-        self.screen.esc_dispatch(intermediates, ignore, b);
-    }
-
-    fn csi_dispatch(
-        &mut self,
-        params: &vte::Params,
-        intermediates: &[u8],
-        ignore: bool,
-        c: char,
-    ) {
-        if intermediates.first().is_none() && c == 't' {
-            let mut iter = params.iter();
-            let op = iter.next().and_then(|x| x.first().copied());
-            if op == Some(8) {
-                let (screen_rows, screen_cols) = self.screen.0.size();
-                let rows = iter.next().map_or(screen_rows, |x| {
-                    *x.first().unwrap_or(&screen_rows)
-                });
-                let cols = iter.next().map_or(screen_cols, |x| {
-                    *x.first().unwrap_or(&screen_cols)
-                });
-                self.callbacks.resize(&mut self.screen.0, (rows, cols));
-            }
-        }
-        self.screen.csi_dispatch(params, intermediates, ignore, c);
-    }
-
-    fn osc_dispatch(&mut self, params: &[&[u8]], bel_terminated: bool) {
-        self.screen.osc_dispatch(params, bel_terminated);
-    }
-
-    fn hook(
-        &mut self,
-        params: &vte::Params,
-        intermediates: &[u8],
-        ignore: bool,
-        action: char,
-    ) {
-        self.screen.hook(params, intermediates, ignore, action);
-    }
 }

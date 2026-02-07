@@ -1,6 +1,18 @@
 # Changelog
 
-## [Unreleased]
+## [0.16.2] - 2025-07-11
+
+### Fixed
+
+* Fixed potential cursor out of bounds when using decrc after resizing. (#13)
+
+## [0.16.1] - 2025-07-10
+
+### Changed
+
+* Reverted to the 2021 edition for now.
+
+## [0.16.0] - 2025-07-08
 
 ### Added
 
@@ -9,12 +21,25 @@
   potentially useful but not something that affects the screen itself.
 * Support for xterm window resize request escape codes, via the new callback
   mechanism.
+* Support for dim formatting. (Daniel Faust, #9)
+* Support for CNL/CPL escape codes. (Danny Weinberg, #10)
+* Support for OSC 52 (clipboard manipulation).
 
 ### Removed
 
-* `Screen::bells_diff`, `Screen::audible_bell_count`,
-  `Screen::visual_bell_count`, and `Screen::errors` have been removed in favor
-  of the new callback api described above.
+* These methods on `Screen` have been removed in favor of the new callback
+  API described above:
+  * `title_formatted`
+  * `title_diff`
+  * `title`
+  * `icon_name`
+  * `bells_diff`
+  * `audible_bell_count`
+  * `visual_bell_count`
+  * `errors`
+* Additionally, unhandled escape sequences no longer log to STDERR; they
+  instead call various callback methods which can be defined to log if
+  desired.
 * `Cell` no longer implements `Default`.
 * `Screen` no longer implements `vte::Perform`.
 
@@ -23,6 +48,13 @@
 * `Parser::set_size` and `Parser::set_scrollback` have been moved to methods
   on `Screen`, and `Parser::screen_mut` was added to get a mutable reference
   to the screen.
+* `Cell::contents` now returns `&str` instead of `String`, eliminating an
+  allocation in many cases. (Chris Olszewski, #14)
+
+### Fixed
+
+* Fixed some issues with calculating scrollback offsets correctly in
+  `Grid::visible_rows`. (rezigned, #11)
 
 ## [0.15.2] - 2023-02-05
 

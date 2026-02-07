@@ -104,12 +104,19 @@ impl BufWrite for ClearAttrs {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum Intensity {
+    Normal,
+    Bold,
+    Dim,
+}
+
 #[derive(Default, Debug)]
 #[must_use = "this struct does nothing unless you call write_buf"]
 pub struct Attrs {
     fgcolor: Option<crate::Color>,
     bgcolor: Option<crate::Color>,
-    bold: Option<bool>,
+    intensity: Option<Intensity>,
     italic: Option<bool>,
     underline: Option<bool>,
     inverse: Option<bool>,
@@ -126,8 +133,8 @@ impl Attrs {
         self
     }
 
-    pub fn bold(mut self, bold: bool) -> Self {
-        self.bold = Some(bold);
+    pub fn intensity(mut self, intensity: Intensity) -> Self {
+        self.intensity = Some(intensity);
         self
     }
 
@@ -153,7 +160,7 @@ impl BufWrite for Attrs {
     fn write_buf(&self, buf: &mut Vec<u8>) {
         if self.fgcolor.is_none()
             && self.bgcolor.is_none()
-            && self.bold.is_none()
+            && self.intensity.is_none()
             && self.italic.is_none()
             && self.underline.is_none()
             && self.inverse.is_none()
@@ -165,14 +172,14 @@ impl BufWrite for Attrs {
         let mut first = true;
 
         macro_rules! write_param {
-            ($i:expr) => {
+            ($i:expr) => {{
                 if first {
                     first = false;
                 } else {
                     buf.push(b';');
                 }
                 extend_itoa(buf, $i);
-            };
+            }};
         }
 
         if let Some(fgcolor) = self.fgcolor {
@@ -227,11 +234,11 @@ impl BufWrite for Attrs {
             }
         }
 
-        if let Some(bold) = self.bold {
-            if bold {
-                write_param!(1);
-            } else {
-                write_param!(22);
+        if let Some(intensity) = self.intensity {
+            match intensity {
+                Intensity::Normal => write_param!(22),
+                Intensity::Bold => write_param!(1),
+                Intensity::Dim => write_param!(2),
             }
         }
 
@@ -372,54 +379,6 @@ impl BufWrite for MoveFromTo {
                 .write_buf(buf);
         } else if self.to != self.from {
             crate::term::MoveTo::new(self.to).write_buf(buf);
-        }
-    }
-}
-
-#[must_use = "this struct does nothing unless you call write_buf"]
-pub struct ChangeTitle<'a> {
-    icon_name: &'a str,
-    title: &'a str,
-    prev_icon_name: &'a str,
-    prev_title: &'a str,
-}
-
-impl<'a> ChangeTitle<'a> {
-    pub fn new(
-        icon_name: &'a str,
-        title: &'a str,
-        prev_icon_name: &'a str,
-        prev_title: &'a str,
-    ) -> Self {
-        Self {
-            icon_name,
-            title,
-            prev_icon_name,
-            prev_title,
-        }
-    }
-}
-
-impl<'a> BufWrite for ChangeTitle<'a> {
-    fn write_buf(&self, buf: &mut Vec<u8>) {
-        if self.icon_name == self.title
-            && (self.icon_name != self.prev_icon_name
-                || self.title != self.prev_title)
-        {
-            buf.extend_from_slice(b"\x1b]0;");
-            buf.extend_from_slice(self.icon_name.as_bytes());
-            buf.push(b'\x07');
-        } else {
-            if self.icon_name != self.prev_icon_name {
-                buf.extend_from_slice(b"\x1b]1;");
-                buf.extend_from_slice(self.icon_name.as_bytes());
-                buf.push(b'\x07');
-            }
-            if self.title != self.prev_title {
-                buf.extend_from_slice(b"\x1b]2;");
-                buf.extend_from_slice(self.title.as_bytes());
-                buf.push(b'\x07');
-            }
         }
     }
 }

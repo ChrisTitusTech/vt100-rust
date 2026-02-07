@@ -8,9 +8,10 @@ const MODE_ALTERNATE_SCREEN: u8 = 0b0000_1000;
 const MODE_BRACKETED_PASTE: u8 = 0b0001_0000;
 
 /// The xterm mouse handling mode currently in use.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
 pub enum MouseProtocolMode {
     /// Mouse handling is disabled.
+    #[default]
     None,
 
     /// Mouse button events should be reported on button press. Also known as
@@ -34,16 +35,11 @@ pub enum MouseProtocolMode {
     // DecLocator,
 }
 
-impl Default for MouseProtocolMode {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
-/// The encoding to use for the enabled `MouseProtocolMode`.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+/// The encoding to use for the enabled [`MouseProtocolMode`].
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
 pub enum MouseProtocolEncoding {
     /// Default single-printable-byte encoding.
+    #[default]
     Default,
 
     /// UTF-8-based encoding.
@@ -54,12 +50,6 @@ pub enum MouseProtocolEncoding {
     // Urxvt,
 }
 
-impl Default for MouseProtocolEncoding {
-    fn default() -> Self {
-        Self::Default
-    }
-}
-
 /// Represents the overall terminal state.
 #[derive(Clone, Debug)]
 pub struct Screen {
@@ -68,9 +58,6 @@ pub struct Screen {
 
     attrs: crate::attrs::Attrs,
     saved_attrs: crate::attrs::Attrs,
-
-    title: String,
-    icon_name: String,
 
     modes: u8,
     mouse_protocol_mode: MouseProtocolMode,
@@ -90,9 +77,6 @@ impl Screen {
 
             attrs: crate::attrs::Attrs::default(),
             saved_attrs: crate::attrs::Attrs::default(),
-
-            title: String::default(),
-            icon_name: String::default(),
 
             modes: 0,
             mouse_protocol_mode: MouseProtocolMode::default(),
@@ -234,25 +218,25 @@ impl Screen {
 
     /// Return escape codes sufficient to reproduce the entire contents of the
     /// current terminal state. This is a convenience wrapper around
-    /// `contents_formatted`, `input_mode_formatted`, and `title_formatted`.
+    /// [`contents_formatted`](Self::contents_formatted) and
+    /// [`input_mode_formatted`](Self::input_mode_formatted).
     #[must_use]
     pub fn state_formatted(&self) -> Vec<u8> {
         let mut contents = vec![];
         self.write_contents_formatted(&mut contents);
         self.write_input_mode_formatted(&mut contents);
-        self.write_title_formatted(&mut contents);
         contents
     }
 
     /// Return escape codes sufficient to turn the terminal state of the
     /// screen `prev` into the current terminal state. This is a convenience
-    /// wrapper around `contents_diff`, `input_mode_diff`, and `title_diff`
+    /// wrapper around [`contents_diff`](Self::contents_diff) and
+    /// [`input_mode_diff`](Self::input_mode_diff).
     #[must_use]
     pub fn state_diff(&self, prev: &Self) -> Vec<u8> {
         let mut contents = vec![];
         self.write_contents_diff(&mut contents, prev);
         self.write_input_mode_diff(&mut contents, prev);
-        self.write_title_diff(&mut contents, prev);
         contents
     }
 
@@ -466,51 +450,19 @@ impl Screen {
     }
 
     /// Returns terminal escape sequences sufficient to set the current
-    /// terminal's window title.
-    #[must_use]
-    pub fn title_formatted(&self) -> Vec<u8> {
-        let mut contents = vec![];
-        self.write_title_formatted(&mut contents);
-        contents
-    }
-
-    fn write_title_formatted(&self, contents: &mut Vec<u8>) {
-        crate::term::ChangeTitle::new(&self.icon_name, &self.title, "", "")
-            .write_buf(contents);
-    }
-
-    /// Returns terminal escape sequences sufficient to change the previous
-    /// terminal's window title to the window title set in the current
-    /// terminal.
-    #[must_use]
-    pub fn title_diff(&self, prev: &Self) -> Vec<u8> {
-        let mut contents = vec![];
-        self.write_title_diff(&mut contents, prev);
-        contents
-    }
-
-    fn write_title_diff(&self, contents: &mut Vec<u8>, prev: &Self) {
-        crate::term::ChangeTitle::new(
-            &self.icon_name,
-            &self.title,
-            &prev.icon_name,
-            &prev.title,
-        )
-        .write_buf(contents);
-    }
-
-    /// Returns terminal escape sequences sufficient to set the current
     /// terminal's drawing attributes.
     ///
     /// Supported drawing attributes are:
     /// * fgcolor
     /// * bgcolor
     /// * bold
+    /// * dim
     /// * italic
     /// * underline
     /// * inverse
     ///
-    /// This is not typically necessary, since `contents_formatted` will leave
+    /// This is not typically necessary, since
+    /// [`contents_formatted`](Self::contents_formatted) will leave
     /// the current active drawing attributes in the correct state, but this
     /// can be useful in the case of drawing additional things on top of a
     /// terminal output, since you will need to restore the terminal state
@@ -542,7 +494,8 @@ impl Screen {
     /// Returns terminal escape sequences sufficient to set the current
     /// cursor state of the terminal.
     ///
-    /// This is not typically necessary, since `contents_formatted` will leave
+    /// This is not typically necessary, since
+    /// [`contents_formatted`](Self::contents_formatted) will leave
     /// the cursor in the correct state, but this can be useful in the case of
     /// drawing additional things on top of a terminal output, since you will
     /// need to restore the terminal state without the terminal contents
@@ -553,7 +506,8 @@ impl Screen {
     /// order to position the cursor correctly (for instance, in the case
     /// where the cursor is past the end of a row). Therefore, you should
     /// ensure to reset the active drawing attributes if necessary after
-    /// processing this data, for instance by using `attributes_formatted`.
+    /// processing this data, for instance by using
+    /// [`attributes_formatted`](Self::attributes_formatted).
     #[must_use]
     pub fn cursor_state_formatted(&self) -> Vec<u8> {
         let mut contents = vec![];
@@ -574,8 +528,8 @@ impl Screen {
         // straightforward.
     }
 
-    /// Returns the `Cell` object at the given location in the terminal, if it
-    /// exists.
+    /// Returns the [`Cell`](crate::Cell) object at the given location in the
+    /// terminal, if it exists.
     #[must_use]
     pub fn cell(&self, row: u16, col: u16) -> Option<&crate::Cell> {
         self.grid().visible_cell(crate::grid::Pos { row, col })
@@ -586,19 +540,7 @@ impl Screen {
     pub fn row_wrapped(&self, row: u16) -> bool {
         self.grid()
             .visible_row(row)
-            .map_or(false, crate::row::Row::wrapped)
-    }
-
-    /// Returns the terminal's window title.
-    #[must_use]
-    pub fn title(&self) -> &str {
-        &self.title
-    }
-
-    /// Returns the terminal's icon name.
-    #[must_use]
-    pub fn icon_name(&self) -> &str {
-        &self.icon_name
+            .is_some_and(crate::row::Row::wrapped)
     }
 
     /// Returns whether the alternate screen is currently in use.
@@ -631,13 +573,13 @@ impl Screen {
         self.mode(MODE_BRACKETED_PASTE)
     }
 
-    /// Returns the currently active `MouseProtocolMode`
+    /// Returns the currently active [`MouseProtocolMode`].
     #[must_use]
     pub fn mouse_protocol_mode(&self) -> MouseProtocolMode {
         self.mouse_protocol_mode
     }
 
-    /// Returns the currently active `MouseProtocolEncoding`
+    /// Returns the currently active [`MouseProtocolEncoding`].
     #[must_use]
     pub fn mouse_protocol_encoding(&self) -> MouseProtocolEncoding {
         self.mouse_protocol_encoding
@@ -660,6 +602,13 @@ impl Screen {
     #[must_use]
     pub fn bold(&self) -> bool {
         self.attrs.bold()
+    }
+
+    /// Returns whether newly drawn text should be rendered with the dim text
+    /// attribute.
+    #[must_use]
+    pub fn dim(&self) -> bool {
+        self.attrs.dim()
     }
 
     /// Returns whether newly drawn text should be rendered with the italic
@@ -1047,13 +996,7 @@ impl Screen {
 
     // ESC c
     pub(crate) fn ris(&mut self) {
-        let title = self.title.clone();
-        let icon_name = self.icon_name.clone();
-
         *self = Self::new(self.grid.size(), self.grid.scrollback_len());
-
-        self.title = title;
-        self.icon_name = icon_name;
     }
 
     // csi codes
@@ -1109,39 +1052,51 @@ impl Screen {
     }
 
     // CSI J
-    pub(crate) fn ed(&mut self, mode: u16) {
+    pub(crate) fn ed(
+        &mut self,
+        mode: u16,
+        mut unhandled: impl FnMut(&mut Self),
+    ) {
         let attrs = self.attrs;
         match mode {
             0 => self.grid_mut().erase_all_forward(attrs),
             1 => self.grid_mut().erase_all_backward(attrs),
             2 => self.grid_mut().erase_all(attrs),
-            n => {
-                log::debug!("unhandled ED mode: {n}");
-            }
+            _ => unhandled(self),
         }
     }
 
     // CSI ? J
-    pub(crate) fn decsed(&mut self, mode: u16) {
-        self.ed(mode);
+    pub(crate) fn decsed(
+        &mut self,
+        mode: u16,
+        unhandled: impl FnMut(&mut Self),
+    ) {
+        self.ed(mode, unhandled);
     }
 
     // CSI K
-    pub(crate) fn el(&mut self, mode: u16) {
+    pub(crate) fn el(
+        &mut self,
+        mode: u16,
+        mut unhandled: impl FnMut(&mut Self),
+    ) {
         let attrs = self.attrs;
         match mode {
             0 => self.grid_mut().erase_row_forward(attrs),
             1 => self.grid_mut().erase_row_backward(attrs),
             2 => self.grid_mut().erase_row(attrs),
-            n => {
-                log::debug!("unhandled EL mode: {n}");
-            }
+            _ => unhandled(self),
         }
     }
 
     // CSI ? K
-    pub(crate) fn decsel(&mut self, mode: u16) {
-        self.el(mode);
+    pub(crate) fn decsel(
+        &mut self,
+        mode: u16,
+        unhandled: impl FnMut(&mut Self),
+    ) {
+        self.el(mode, unhandled);
     }
 
     // CSI L
@@ -1180,129 +1135,89 @@ impl Screen {
         self.grid_mut().row_set(row - 1);
     }
 
-    // CSI h
-    #[allow(clippy::unused_self)]
-    pub(crate) fn sm(&mut self, params: &vte::Params) {
-        // nothing, i think?
-        if log::log_enabled!(log::Level::Debug) {
-            log::debug!(
-                "unhandled SM mode: {}",
-                crate::perform::param_str(params)
-            );
-        }
-    }
-
     // CSI ? h
-    pub(crate) fn decset(&mut self, params: &vte::Params) {
+    pub(crate) fn decset(
+        &mut self,
+        params: &vte::Params,
+        mut unhandled: impl FnMut(&mut Self),
+    ) {
         for param in params {
             match param {
-                &[1] => self.set_mode(MODE_APPLICATION_CURSOR),
-                &[6] => self.grid_mut().set_origin_mode(true),
-                &[9] => self.set_mouse_mode(MouseProtocolMode::Press),
-                &[25] => self.clear_mode(MODE_HIDE_CURSOR),
-                &[47] => self.enter_alternate_grid(),
-                &[1000] => {
+                [1] => self.set_mode(MODE_APPLICATION_CURSOR),
+                [6] => self.grid_mut().set_origin_mode(true),
+                [9] => self.set_mouse_mode(MouseProtocolMode::Press),
+                [25] => self.clear_mode(MODE_HIDE_CURSOR),
+                [47] => self.enter_alternate_grid(),
+                [1000] => {
                     self.set_mouse_mode(MouseProtocolMode::PressRelease);
                 }
-                &[1002] => {
+                [1002] => {
                     self.set_mouse_mode(MouseProtocolMode::ButtonMotion);
                 }
-                &[1003] => self.set_mouse_mode(MouseProtocolMode::AnyMotion),
-                &[1005] => {
+                [1003] => self.set_mouse_mode(MouseProtocolMode::AnyMotion),
+                [1005] => {
                     self.set_mouse_encoding(MouseProtocolEncoding::Utf8);
                 }
-                &[1006] => {
+                [1006] => {
                     self.set_mouse_encoding(MouseProtocolEncoding::Sgr);
                 }
-                &[1049] => {
+                [1049] => {
                     self.decsc();
                     self.alternate_grid.clear();
                     self.enter_alternate_grid();
                 }
-                &[2004] => self.set_mode(MODE_BRACKETED_PASTE),
-                ns => {
-                    if log::log_enabled!(log::Level::Debug) {
-                        let n = if ns.len() == 1 {
-                            format!(
-                                "{}",
-                                // we just checked that ns.len() == 1, so 0
-                                // must be valid
-                                ns[0]
-                            )
-                        } else {
-                            format!("{ns:?}")
-                        };
-                        log::debug!("unhandled DECSET mode: {n}");
-                    }
-                }
+                [2004] => self.set_mode(MODE_BRACKETED_PASTE),
+                _ => unhandled(self),
             }
         }
     }
 
-    // CSI l
-    #[allow(clippy::unused_self)]
-    pub(crate) fn rm(&mut self, params: &vte::Params) {
-        // nothing, i think?
-        if log::log_enabled!(log::Level::Debug) {
-            log::debug!(
-                "unhandled RM mode: {}",
-                crate::perform::param_str(params)
-            );
-        }
-    }
-
     // CSI ? l
-    pub(crate) fn decrst(&mut self, params: &vte::Params) {
+    pub(crate) fn decrst(
+        &mut self,
+        params: &vte::Params,
+        mut unhandled: impl FnMut(&mut Self),
+    ) {
         for param in params {
             match param {
-                &[1] => self.clear_mode(MODE_APPLICATION_CURSOR),
-                &[6] => self.grid_mut().set_origin_mode(false),
-                &[9] => self.clear_mouse_mode(MouseProtocolMode::Press),
-                &[25] => self.set_mode(MODE_HIDE_CURSOR),
-                &[47] => {
+                [1] => self.clear_mode(MODE_APPLICATION_CURSOR),
+                [6] => self.grid_mut().set_origin_mode(false),
+                [9] => self.clear_mouse_mode(MouseProtocolMode::Press),
+                [25] => self.set_mode(MODE_HIDE_CURSOR),
+                [47] => {
                     self.exit_alternate_grid();
                 }
-                &[1000] => {
+                [1000] => {
                     self.clear_mouse_mode(MouseProtocolMode::PressRelease);
                 }
-                &[1002] => {
+                [1002] => {
                     self.clear_mouse_mode(MouseProtocolMode::ButtonMotion);
                 }
-                &[1003] => {
+                [1003] => {
                     self.clear_mouse_mode(MouseProtocolMode::AnyMotion);
                 }
-                &[1005] => {
+                [1005] => {
                     self.clear_mouse_encoding(MouseProtocolEncoding::Utf8);
                 }
-                &[1006] => {
+                [1006] => {
                     self.clear_mouse_encoding(MouseProtocolEncoding::Sgr);
                 }
-                &[1049] => {
+                [1049] => {
                     self.exit_alternate_grid();
                     self.decrc();
                 }
-                &[2004] => self.clear_mode(MODE_BRACKETED_PASTE),
-                ns => {
-                    if log::log_enabled!(log::Level::Debug) {
-                        let n = if ns.len() == 1 {
-                            format!(
-                                "{}",
-                                // we just checked that ns.len() == 1, so 0
-                                // must be valid
-                                ns[0]
-                            )
-                        } else {
-                            format!("{ns:?}")
-                        };
-                        log::debug!("unhandled DECRST mode: {n}");
-                    }
-                }
+                [2004] => self.clear_mode(MODE_BRACKETED_PASTE),
+                _ => unhandled(self),
             }
         }
     }
 
     // CSI m
-    pub(crate) fn sgr(&mut self, params: &vte::Params) {
+    pub(crate) fn sgr(
+        &mut self,
+        params: &vte::Params,
+        mut unhandled: impl FnMut(&mut Self),
+    ) {
         // XXX really i want to just be able to pass in a default Params
         // instance with a 0 in it, but vte doesn't allow creating new Params
         // instances
@@ -1344,118 +1259,81 @@ impl Screen {
 
         loop {
             match next_param!() {
-                &[0] => self.attrs = crate::attrs::Attrs::default(),
-                &[1] => self.attrs.set_bold(true),
-                &[3] => self.attrs.set_italic(true),
-                &[4] => self.attrs.set_underline(true),
-                &[7] => self.attrs.set_inverse(true),
-                &[22] => self.attrs.set_bold(false),
-                &[23] => self.attrs.set_italic(false),
-                &[24] => self.attrs.set_underline(false),
-                &[27] => self.attrs.set_inverse(false),
-                &[n] if (30..=37).contains(&n) => {
-                    self.attrs.fgcolor = crate::Color::Idx(to_u8!(n) - 30);
+                [0] => self.attrs = crate::attrs::Attrs::default(),
+                [1] => self.attrs.set_bold(),
+                [2] => self.attrs.set_dim(),
+                [3] => self.attrs.set_italic(true),
+                [4] => self.attrs.set_underline(true),
+                [7] => self.attrs.set_inverse(true),
+                [22] => self.attrs.set_normal_intensity(),
+                [23] => self.attrs.set_italic(false),
+                [24] => self.attrs.set_underline(false),
+                [27] => self.attrs.set_inverse(false),
+                [n] if (30..=37).contains(n) => {
+                    self.attrs.fgcolor = crate::Color::Idx(to_u8!(*n) - 30);
                 }
-                &[38, 2, r, g, b] => {
+                [38, 2, r, g, b] => {
                     self.attrs.fgcolor =
-                        crate::Color::Rgb(to_u8!(r), to_u8!(g), to_u8!(b));
+                        crate::Color::Rgb(to_u8!(*r), to_u8!(*g), to_u8!(*b));
                 }
-                &[38, 5, i] => {
-                    self.attrs.fgcolor = crate::Color::Idx(to_u8!(i));
+                [38, 5, i] => {
+                    self.attrs.fgcolor = crate::Color::Idx(to_u8!(*i));
                 }
-                &[38] => match next_param!() {
-                    &[2] => {
+                [38] => match next_param!() {
+                    [2] => {
                         let r = next_param_u8!();
                         let g = next_param_u8!();
                         let b = next_param_u8!();
                         self.attrs.fgcolor = crate::Color::Rgb(r, g, b);
                     }
-                    &[5] => {
+                    [5] => {
                         self.attrs.fgcolor =
                             crate::Color::Idx(next_param_u8!());
                     }
-                    ns => {
-                        if log::log_enabled!(log::Level::Debug) {
-                            let n = if ns.len() == 1 {
-                                format!(
-                                    "{}",
-                                    // we just checked that ns.len() == 1, so
-                                    // 0 must be valid
-                                    ns[0]
-                                )
-                            } else {
-                                format!("{ns:?}")
-                            };
-                            log::debug!("unhandled SGR mode: 38 {n}");
-                        }
+                    _ => {
+                        unhandled(self);
                         return;
                     }
                 },
-                &[39] => {
+                [39] => {
                     self.attrs.fgcolor = crate::Color::Default;
                 }
-                &[n] if (40..=47).contains(&n) => {
-                    self.attrs.bgcolor = crate::Color::Idx(to_u8!(n) - 40);
+                [n] if (40..=47).contains(n) => {
+                    self.attrs.bgcolor = crate::Color::Idx(to_u8!(*n) - 40);
                 }
-                &[48, 2, r, g, b] => {
+                [48, 2, r, g, b] => {
                     self.attrs.bgcolor =
-                        crate::Color::Rgb(to_u8!(r), to_u8!(g), to_u8!(b));
+                        crate::Color::Rgb(to_u8!(*r), to_u8!(*g), to_u8!(*b));
                 }
-                &[48, 5, i] => {
-                    self.attrs.bgcolor = crate::Color::Idx(to_u8!(i));
+                [48, 5, i] => {
+                    self.attrs.bgcolor = crate::Color::Idx(to_u8!(*i));
                 }
-                &[48] => match next_param!() {
-                    &[2] => {
+                [48] => match next_param!() {
+                    [2] => {
                         let r = next_param_u8!();
                         let g = next_param_u8!();
                         let b = next_param_u8!();
                         self.attrs.bgcolor = crate::Color::Rgb(r, g, b);
                     }
-                    &[5] => {
+                    [5] => {
                         self.attrs.bgcolor =
                             crate::Color::Idx(next_param_u8!());
                     }
-                    ns => {
-                        if log::log_enabled!(log::Level::Debug) {
-                            let n = if ns.len() == 1 {
-                                format!(
-                                    "{}",
-                                    // we just checked that ns.len() == 1, so
-                                    // 0 must be valid
-                                    ns[0]
-                                )
-                            } else {
-                                format!("{ns:?}")
-                            };
-                            log::debug!("unhandled SGR mode: 48 {n}");
-                        }
+                    _ => {
+                        unhandled(self);
                         return;
                     }
                 },
-                &[49] => {
+                [49] => {
                     self.attrs.bgcolor = crate::Color::Default;
                 }
-                &[n] if (90..=97).contains(&n) => {
-                    self.attrs.fgcolor = crate::Color::Idx(to_u8!(n) - 82);
+                [n] if (90..=97).contains(n) => {
+                    self.attrs.fgcolor = crate::Color::Idx(to_u8!(*n) - 82);
                 }
-                &[n] if (100..=107).contains(&n) => {
-                    self.attrs.bgcolor = crate::Color::Idx(to_u8!(n) - 92);
+                [n] if (100..=107).contains(n) => {
+                    self.attrs.bgcolor = crate::Color::Idx(to_u8!(*n) - 92);
                 }
-                ns => {
-                    if log::log_enabled!(log::Level::Debug) {
-                        let n = if ns.len() == 1 {
-                            format!(
-                                "{}",
-                                // we just checked that ns.len() == 1, so 0
-                                // must be valid
-                                ns[0]
-                            )
-                        } else {
-                            format!("{ns:?}")
-                        };
-                        log::debug!("unhandled SGR mode: {n}");
-                    }
-                }
+                _ => unhandled(self),
             }
         }
     }
@@ -1463,41 +1341,6 @@ impl Screen {
     // CSI r
     pub(crate) fn decstbm(&mut self, (top, bottom): (u16, u16)) {
         self.grid_mut().set_scroll_region(top - 1, bottom - 1);
-    }
-
-    // CSI t
-    #[allow(clippy::unused_self)]
-    pub(crate) fn xtwinops(&self, params: &vte::Params) {
-        let mut iter = params.iter();
-        let op = iter.next().and_then(|x| x.first().copied());
-        match op {
-            Some(8) => {}
-            _ => {
-                log::debug!(
-                    "unhandled XTWINOPS: {}",
-                    crate::perform::param_str(params)
-                );
-            }
-        }
-    }
-
-    // osc codes
-
-    pub(crate) fn osc0(&mut self, s: &[u8]) {
-        self.osc1(s);
-        self.osc2(s);
-    }
-
-    pub(crate) fn osc1(&mut self, s: &[u8]) {
-        if let Ok(s) = std::str::from_utf8(s) {
-            self.icon_name = s.to_string();
-        }
-    }
-
-    pub(crate) fn osc2(&mut self, s: &[u8]) {
-        if let Ok(s) = std::str::from_utf8(s) {
-            self.title = s.to_string();
-        }
     }
 }
 
